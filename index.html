@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Hana Memoria</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; background: #F5F5DC; }
+        
+        #main-container { position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: center; align-items: center; transition: transform 0.8s ease-in-out; background: inherit; }
+        .card { background: white; padding: 30px; border-radius: 20px; text-align: center; width: 80%; max-width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .btn-utama { border: none; padding: 12px 25px; border-radius: 50px; color: white; font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%; display: none; }
+        
+        /* Container Kamera Full Screen */
+        #scanner-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* Animasi Tutorial HP Minimalis */
+        #tutorial-overlay { position: fixed; inset: 0; z-index: 1500; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.75); color: white; backdrop-filter: blur(3px); }
+        .phone-scan { width: 60px; height: 110px; border: 3px solid white; border-radius: 12px; position: relative; animation: upDown 2s infinite ease-in-out; margin-bottom: 20px; }
+        .scan-line { position: absolute; top: 10%; left: -10px; right: -10px; height: 3px; background: #00ffcc; box-shadow: 0 0 15px #00ffcc; animation: scanMove 2s infinite linear; }
+        @keyframes upDown { 0%, 100% { transform: translateY(-10px); } 50% { transform: translateY(10px); } }
+        @keyframes scanMove { 0% { top: 10%; } 50% { top: 90%; } 100% { top: 10%; } }
+
+        #admin-controls { position: fixed; top: 0; left: 0; z-index: 9999; background: rgba(0,0,0,0.8); color: white; padding: 10px; display: none; flex-wrap: wrap; gap: 5px; font-size: 10px; width: 100%; justify-content: center; }
+        .btn-admin { background: #444; color: white; border: 1px solid #666; padding: 8px; border-radius: 4px; cursor: pointer; }
+        #qr-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:10000; flex-direction:column; justify-content:center; align-items:center; color:white; }
+    </style>
+</head>
+<body>
+
+    <button id="startBtn" style="position:fixed; inset:0; z-index:3000; background:#000; color:#fff; border:none; font-size:1.2rem;">KLIK UNTUK MEMULAI ✨</button>
+
+    <!-- UI Tutorial Scan -->
+    <div id="tutorial-overlay">
+        <div class="phone-scan">
+            <div class="scan-line"></div>
+        </div>
+        <h3 style="margin:0;">Arahkan Kamera</h3>
+        <p style="font-size:0.9rem; opacity:0.8;">Paskan foto ke dalam layar</p>
+    </div>
+
+    <!-- UI Admin -->
+    <div id="admin-controls">
+        <button class="btn-admin" onclick="move('up')">↑</button>
+        <button class="btn-admin" onclick="move('down')">↓</button>
+        <button class="btn-admin" onclick="move('left')">←</button>
+        <button class="btn-admin" onclick="move('right')">→</button>
+        <button class="btn-admin" onclick="adjust('w', 0.1)">W+</button>
+        <button class="btn-admin" onclick="adjust('w', -0.1)">W-</button>
+        <button class="btn-admin" onclick="adjust('h', 0.1)">H+</button>
+        <button class="btn-admin" onclick="adjust('h', -0.1)">H-</button>
+        <button class="btn-admin" style="background: #27ae60;" onclick="showLogs()">HASIL</button>
+        <button class="btn-admin" style="background: #2980b9;" onclick="tampilkanQR()">QR</button>
+    </div>
+
+    <!-- UI Pesan Pembuka -->
+    <div id="main-container">
+        <div class="card" id="card-pesan">
+            <h2 id="judul-txt">Memuat...</h2>
+            <p id="isi-txt">Menghubungkan ke data kenangan...</p>
+            <button class="btn-utama" id="btn-next" onclick="handleNext()">LANJUT</button>
+        </div>
+    </div>
+
+        <div id="qr-overlay">
+        <div style="background:transparent; padding:20px; border-radius:15px; text-align:center; display:flex; flex-direction:column; align-items:center;">
+            <canvas id="qr-canvas" style="background: transparent; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></canvas>
+            
+            <div style="margin-top: 20px; display:flex; gap: 10px;">
+                <button class="btn-admin" style="background: #27ae60; color:white; font-size:14px; padding: 10px 20px; font-weight:bold;" onclick="downloadQR()">📥 DOWNLOAD</button>
+                <button class="btn-admin" style="background: #e74c3c; color:white; font-size:14px; padding: 10px 20px; font-weight:bold;" onclick="document.getElementById('qr-overlay').style.display='none'">TUTUP</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scanner-container"></div>
+
+    <script>
+        // --- MASUKKAN URL & KEY SUPABASE KAMU DI SINI ---
+        const SUPABASE_URL = 'https://ujnuvlrdxzqtfppbhioo.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqbnV2bHJkeHpxdGZwcGJoaW9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjU2OTYsImV4cCI6MjA5MDY0MTY5Nn0.slqPc8v7QZXxHzvMkOlXWAAYebX-sqUIiKZvA9DJkl0';
+        // ------------------------------------------------
+
+        const params = new URLSearchParams(window.location.search);
+        const idPelanggan = params.get('id') || 'default';
+        const isAdmin = params.get('admin') === 'true';
+
+        let slides = [];
+        let slideIndex = 0;
+        let posX = 0, posY = 0, w = 1, h = 1.5, rotZ = 0;
+
+        if(isAdmin) document.getElementById('admin-controls').style.display = 'flex';
+
+        async function loadData() {
+            try {
+                // KITA KEMBALIKAN FILTER ID AGAR SPESIFIK KE PELANGGAN
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/Pesanan?id_pesanan=eq.${idPelanggan}`, {
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                
+                if (!res.ok) throw new Error("Gagal akses database");
+                
+                const result = await res.json();
+                const data = result[0];
+
+                if(data) {
+                    slides = data.slides || [{"t": "Haii! ✨", "b": "Siap melihat keajaiban foto ini?"}];
+                    
+                    const p = (data.video_posisi || "0 0 0").split(' ');
+                    const s = (data.video_skala || "1 1.5 1").split(' ');
+                    posX = parseFloat(p[0]); posY = parseFloat(p[1]);
+                    w = parseFloat(s[0]); h = parseFloat(s[1]);
+                    rotZ = parseFloat((data.video_rotasi || "0 0 0").split(' ')[2]);
+
+                    document.body.style.backgroundColor = data.warna_bg || "#F5F5DC";
+                    document.getElementById('main-container').style.backgroundColor = data.warna_bg || "#F5F5DC";
+                    document.getElementById('btn-next').style.backgroundColor = data.warna_tombol || "#333";
+
+                    // Inject Scanner AR
+                    document.getElementById('scanner-container').innerHTML = `
+                        <a-scene id="ar-scene" mindar-image="imageTargetSrc: ${data.link_target}; autoStart: false; uiScanning: no;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+                            <a-assets>
+                                <video id="webVideo" src="${data.link_video}" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
+                            </a-assets>
+                            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+                            <a-entity mindar-image-target="targetIndex: 0" id="target-ar">
+                                <a-video id="vDisplay" src="#webVideo" position="${posX} ${posY} 0" width="${w}" height="${h}" rotation="0 0 ${rotZ}"></a-video>
+                            </a-entity>
+                        </a-scene>
+                    `;
+
+                    document.getElementById('btn-next').style.display = 'block';
+                    updateUI();
+
+                    // Listener untuk Animasi Tutorial & Video Play
+                    setTimeout(() => {
+                        const targetAR = document.getElementById('target-ar');
+                        const vid = document.getElementById('webVideo');
+                        
+                        targetAR.addEventListener("targetFound", event => {
+                            document.getElementById('tutorial-overlay').style.display = 'none'; // Sembunyikan tutorial
+                            vid.play(); // Putar video saat terdeteksi
+                        });
+                        
+                        targetAR.addEventListener("targetLost", event => {
+                            document.getElementById('tutorial-overlay').style.display = 'flex'; // Munculkan tutorial lagi
+                            vid.pause(); // Pause video
+                        });
+                    }, 1500);
+
+                } else {
+                    document.getElementById('judul-txt').innerText = "Oops!";
+                    document.getElementById('isi-txt').innerText = "ID tidak ditemukan. Cek link kamu ya.";
+                }
+            } catch (e) { 
+                document.getElementById('judul-txt').innerText = "Koneksi Gagal";
+                document.getElementById('isi-txt').innerText = "Cek URL dan API Key kamu.";
+            }
+        }
+
+        function updateUI() {
+            if(slides.length > 0) {
+                document.getElementById('judul-txt').innerText = slides[slideIndex].t;
+                document.getElementById('isi-txt').innerText = slides[slideIndex].b;
+                document.getElementById('btn-next').innerText = (slideIndex === slides.length - 1) ? "LIHAT KEJUTAN" : "LANJUT";
+            }
+            const vd = document.getElementById('vDisplay');
+            if(vd) {
+                vd.setAttribute('position', `${posX} ${posY} 0`);
+                vd.setAttribute('width', w);
+                vd.setAttribute('height', h);
+                vd.setAttribute('rotation', `0 0 ${rotZ}`);
+            }
+        }
+
+        function handleNext() {
+            if(slideIndex < slides.length - 1) {
+                slideIndex++;
+                updateUI();
+            } else {
+                // Sembunyikan pesan, mulai kamera & munculkan tutorial
+                document.getElementById('main-container').style.transform = "translateY(-100%)";
+                document.getElementById('tutorial-overlay').style.display = 'flex';
+                
+                const scene = document.getElementById('ar-scene');
+                scene.systems["mindar-image-system"].start();
+                
+                // Pancing video untuk siap diputar
+                document.getElementById('webVideo').play().catch(()=>{});
+                document.getElementById('webVideo').pause();
+            }
+        }
+
+        function move(dir) {
+            if(dir === 'up') posY += 0.05; if(dir === 'down') posY -= 0.05;
+            if(dir === 'left') posX -= 0.05; if(dir === 'right') posX += 0.05;
+            updateUI();
+        }
+        function adjust(type, val) {
+            if(type === 'w') w += val; if(type === 'h') h += val;
+            updateUI();
+        }
+        function showLogs() {
+            alert(`HASIL UNTUK SUPABASE:\nvideo_posisi: ${posX.toFixed(2)} ${posY.toFixed(2)} 0\nvideo_skala: ${w.toFixed(2)} ${h.toFixed(2)} 1\nvideo_rotasi: 0 0 ${rotZ}`);
+        }
+                // --- KODE BARU MULAI DISINI ---
+        function drawRoundedRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        function drawTopRoundedRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        function tampilkanQR() {
+            const url = `${window.location.origin}${window.location.pathname}?id=${idPelanggan}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+            const canvas = document.getElementById('qr-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 300;
+            canvas.height = 380;
+            const img = new Image();
+            img.crossOrigin = "Anonymous"; 
+            img.src = qrUrl;
+            img.onload = () => {
+                ctx.fillStyle = "#ffffff";
+                drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 20);
+                ctx.fill();
+                ctx.fillStyle = "#2980b9";
+                drawTopRoundedRect(ctx, 0, 0, canvas.width, 60, 20);
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 24px 'Segoe UI', sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("SCAN ME", canvas.width / 2, 40);
+                ctx.shadowColor = "rgba(0,0,0,0.1)";
+                ctx.shadowBlur = 10;
+                ctx.shadowOffsetY = 5;
+                ctx.drawImage(img, 50, 85, 200, 200);
+                ctx.shadowColor = "transparent";
+                ctx.fillStyle = "#333333";
+                ctx.font = "bold 18px 'Segoe UI', sans-serif";
+                ctx.fillText(`ID: ${idPelanggan}`, canvas.width / 2, 325);
+                ctx.fillStyle = "#7f8c8d";
+                ctx.font = "14px 'Segoe UI', sans-serif";
+                ctx.fillText("✨ Hana Memoria ✨", canvas.width / 2, 350);
+                document.getElementById('qr-overlay').style.display = 'flex';
+            };
+        }
+
+        function downloadQR() {
+            const canvas = document.getElementById('qr-canvas');
+            const link = document.createElement('a');
+            link.download = `QR_HanaMemoria_${idPelanggan}.png`; 
+            link.href = canvas.toDataURL("image/png"); 
+            link.click();
+        }
+        // --- KODE BARU SELESAI ---
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            document.getElementById('startBtn').style.display = 'none';
+            loadData();
+        });
+    </script>
+</body>
+</html>
