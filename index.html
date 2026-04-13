@@ -63,13 +63,13 @@
         </div>
     </div>
 
-        <div id="qr-overlay">
-        <div style="background:transparent; padding:20px; border-radius:15px; text-align:center; display:flex; flex-direction:column; align-items:center;">
-            <canvas id="qr-canvas" style="background: transparent; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></canvas>
+            <div id="qr-overlay">
+        <div style="background:transparent; padding:20px; text-align:center; display:flex; flex-direction:column; align-items:center;">
+            <canvas id="qr-canvas" style="background: transparent; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);"></canvas>
             
-            <div style="margin-top: 20px; display:flex; gap: 10px;">
-                <button class="btn-admin" style="background: #27ae60; color:white; font-size:14px; padding: 10px 20px; font-weight:bold;" onclick="downloadQR()">📥 DOWNLOAD</button>
-                <button class="btn-admin" style="background: #e74c3c; color:white; font-size:14px; padding: 10px 20px; font-weight:bold;" onclick="document.getElementById('qr-overlay').style.display='none'">TUTUP</button>
+            <div style="margin-top: 20px; display:flex; gap: 10px; width: 100%; justify-content: center;">
+                <button class="btn-admin" style="background: #a67c52; color:white; border:none; padding: 12px 20px;" onclick="downloadQR()">📥 SIMPAN GAMBAR</button>
+                <button class="btn-admin" style="background: #d2b48c; color:white; border:none; padding: 12px 20px;" onclick="document.getElementById('qr-overlay').style.display='none'">TUTUP</button>
             </div>
         </div>
     </div>
@@ -205,55 +205,64 @@
             alert(`HASIL UNTUK SUPABASE:\nvideo_posisi: ${posX.toFixed(2)} ${posY.toFixed(2)} 0\nvideo_skala: ${w.toFixed(2)} ${h.toFixed(2)} 1\nvideo_rotasi: 0 0 ${rotZ}`);
         }
                 // --- KODE BARU MULAI DISINI ---
-        function drawRoundedRect(ctx, x, y, w, h, r) {
+                function drawSoftFrame(ctx, x, y, w, h, r) {
             ctx.beginPath();
-            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-        }
-
-        function drawTopRoundedRect(ctx, x, y, w, h, r) {
-            ctx.beginPath();
-            ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + r);
+            ctx.strokeStyle = "#a67c52"; // Warna cokelat soft
+            ctx.lineWidth = 3;
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w/2 - 60, y); // Garis atas kiri
+            ctx.moveTo(x + w/2 + 60, y);
+            ctx.lineTo(x + w - r, y); // Garis atas kanan
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
             ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
+            ctx.stroke();
         }
 
         function tampilkanQR() {
             const url = `${window.location.origin}${window.location.pathname}?id=${idPelanggan}`;
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(url)}`;
+            
             const canvas = document.getElementById('qr-canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = 300;
-            canvas.height = 380;
+            
+            canvas.width = 400;
+            canvas.height = 500;
+            
             const img = new Image();
-            img.crossOrigin = "Anonymous"; 
+            img.crossOrigin = "Anonymous";
             img.src = qrUrl;
+            
             img.onload = () => {
-                ctx.fillStyle = "#ffffff";
-                drawRoundedRect(ctx, 0, 0, canvas.width, canvas.height, 20);
-                ctx.fill();
-                ctx.fillStyle = "#2980b9";
-                drawTopRoundedRect(ctx, 0, 0, canvas.width, 60, 20);
-                ctx.fill();
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "bold 24px 'Segoe UI', sans-serif";
+                // 1. Background Krem Soft
+                ctx.fillStyle = "#fdf5e6"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 2. Gambar Bingkai
+                drawSoftFrame(ctx, 30, 60, 340, 400, 30);
+
+                // 3. Tulisan SCAN ME (Di tengah garis atas)
+                ctx.fillStyle = "#5d4037"; // Cokelat gelap
+                ctx.font = "bold 28px 'Segoe UI', sans-serif";
                 ctx.textAlign = "center";
-                ctx.fillText("SCAN ME", canvas.width / 2, 40);
-                ctx.shadowColor = "rgba(0,0,0,0.1)";
-                ctx.shadowBlur = 10;
-                ctx.shadowOffsetY = 5;
-                ctx.drawImage(img, 50, 85, 200, 200);
-                ctx.shadowColor = "transparent";
-                ctx.fillStyle = "#333333";
-                ctx.font = "bold 18px 'Segoe UI', sans-serif";
-                ctx.fillText(`ID: ${idPelanggan}`, canvas.width / 2, 325);
-                ctx.fillStyle = "#7f8c8d";
-                ctx.font = "14px 'Segoe UI', sans-serif";
-                ctx.fillText("✨ Hana Memoria ✨", canvas.width / 2, 350);
+                ctx.fillText("SCAN ME", canvas.width / 2, 75);
+
+                // 4. Gambar QR Code
+                ctx.drawImage(img, 75, 110, 250, 250);
+                
+                // 5. Teks ID Pesanan
+                ctx.fillStyle = "#8d6e63";
+                ctx.font = "bold 20px 'Segoe UI', sans-serif";
+                ctx.fillText(`Order ID: ${idPelanggan}`, canvas.width / 2, 420);
+
+                // 6. Nama Brand (Hana Memoria)
+                ctx.font = "italic 16px 'Segoe UI', sans-serif";
+                ctx.fillText("✨ Hana Memoria ✨", canvas.width / 2, 450);
+
                 document.getElementById('qr-overlay').style.display = 'flex';
             };
         }
@@ -261,7 +270,7 @@
         function downloadQR() {
             const canvas = document.getElementById('qr-canvas');
             const link = document.createElement('a');
-            link.download = `QR_HanaMemoria_${idPelanggan}.png`; 
+            link.download = `QR_Hana_${idPelanggan}.png`; 
             link.href = canvas.toDataURL("image/png"); 
             link.click();
         }
